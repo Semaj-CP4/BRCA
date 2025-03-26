@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+import os
+import pandas as pd
+
+def create_gene_expression_matrix(input_dir, matrix_file, log_file="gene_expression_matrix_log.txt"):
+    """
+    Build a gene expression matrix from TCGA RNA-seq TSV files.
+    
+    Args:
+        input_dir (str): Directory containing subdirectories with TSV files
+        matrix_file (str): Path to save the output gene expression matrix
+        log_file (str): Path to save the log file
+    """
+    # Redirect print output to a log file
+    with open(log_file, "w") as log, open(matrix_file, "w") as out_file:
+        def log_print(message):
+            print(message, file=log)
+            print(message)  # Also print to console for visibility
+        
+        gene_data = {}  # Dictionary to store gene expression data
+        
+        # Ensure the input directory exists
+        if not os.path.exists(input_dir):
+            raise FileNotFoundError(f"Input directory '{input_dir}' not found. Please check the path and try again.")
+        
+        log_print(f"Starting to process files in: {input_dir}")
+        
+        # Process each file in the input directory
+        for folder in os.listdir(input_dir):
+            folder_path = os.path.join(input_dir, folder)
+            
+            if os.path.isdir(folder_path):  # Ensure it's a directory
+                log_print(f"Processing directory: {folder}")
+                for filename in os.listdir(folder_path):
+                    if filename.endswith(".tsv"):  # Ensure we process only TSV files
+                        file_path = os.path.join(folder_path, filename)
+                        
+                        log_print(f"Reading file: {file_path}")
+                        
+                        try:
+                            with open(file_path, "r") as file:
+                                lines = file.readlines()  # Read all lines
+                                
+                                for line in lines:
+                                    if line.startswith("#"):
+                                        continue  # Skip comment lines
+                                    
+                                    parts = line.strip().split('\t')
+                                    
+                                    # Ensure line has at least 6 parts and is not a non-gene row
+                                    if len(parts) < 6 or parts[0].startswith("N_"):
+                                        continue  # Skip malformed or non-gene rows
+                                    
+                                    gene_id = parts[0]
+                                    gene_name = parts[1]  # Column 2 (gene_name)
+                                    stranded_second = parts[5]  # Column 6 (stranded_second)
+                                    
+                                    # Store just the gene name and stranded_second value
+                                    gene_data[gene_id] = (gene_name, stranded_second)
+                        except Exception as e:
+                            log_print(f"Error processing file {file_path}: {str(e)}")
+        
+        # Check if gene_data has been populated correctly
+        log_print("Gene data collection summary:")
+        log_print(f"Number of genes: {len(gene_data)}")
+        
+        # Write the simple output format directly to file
+        if gene_data:
+            log_print("Creating gene expression output...")
+            
+            # Write header
+            out_file.write("gene_name\tstranded_second\n")
+            
+            # Write each gene's data
+            for gene_id, (gene_name, stranded_second) in gene_data.items():
+                out_file.write(f"{gene_name}\t{stranded_second}\n")
+            
+            log_print(f"Gene expression data saved to {matrix_file}")
+        else:
+            log_print("No gene data to save. Check input files and directory structure.")
+
+# Example usage
+if __name__ == "__main__":
+    input_directory = "/scratch/student/tcga-brca-transcriptome/Test" 
+    output_filename = "gene_expression_simple.tsv"
+    create_gene_expression_matrix(input_directory, output_filename)
